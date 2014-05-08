@@ -15,15 +15,6 @@ sub new{
   Log::Log4perl->easy_init($INFO);
   $self->{logger} = Log::Log4perl->get_logger('Net::GereTPs::V1');
 
-  unless (defined $params->{email}){
-    $self->{logger}->error("Email parameter is required for authentication.");
-    exit(1);
-  }
-  unless (defined $params->{password} || defined $params->{auth_token}){
-    $self->{logger}->error("Password or Authentication Token parameters are required for authentication.");
-    exit(1);
-  }
-
   # FIX ME
     $self->{service}{api}{url} = "http://localhost:3000/api";
   

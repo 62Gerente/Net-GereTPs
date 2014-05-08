@@ -14,11 +14,6 @@ sub new{
   Log::Log4perl->easy_init($INFO);
   my $logger = Log::Log4perl->get_logger('Net::GereTPs');
 
-  if(defined $params->{version} && $params->{version} != 1){
-    $logger->error("Invalid version.");
-    exit(1);
-  }
-
   return Net::GereTPs::V1->new($params);
 }
 

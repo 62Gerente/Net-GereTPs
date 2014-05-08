@@ -1,8 +1,188 @@
 #!/usr/bin/perl
 
-use strict;
-use warnings;
+use common::sense;
 use Net::GereTPs;
+use Getopt::Long;
+
+my $SUCCESS = 0;
+my $ERROR_INVALID_COMMAND = -1;
+my $ERROR_INVALID_PARAMS = -2;
+my $ERROR_AUTHENTICATION = -3;
+my $ERROR_NOT_GERETPS_FOLDER = -4;
+my $ERROR_MKDIR = -5;
+
+my %params = ();
+parser();
+
+sub parser{
+  my $help = 0;
+  GetOptions('help|?' => \$params{help},
+             'email=s' => \$params{email},
+             'password=s' => \$params{password});
+
+  _help() if !@ARGV || defined $params{help};
+
+  my $command = shift @ARGV;
+
+  given($command){
+    when("help"){ _help() }
+    when("init"){ _init() }
+    when("login"){ _login() }
+    when("list"){ _list() }
+    default{
+      say "geretps: '$command' is not a geretps command. See 'geretps --help'.";
+      exit($ERROR_INVALID_COMMAND);
+    }
+  }
+
+  exit($SUCCESS);
+}
+
+sub _help{
+  say "usage: geretps <command> [<args>]";
+
+  say "\nCommands:";
+  printf "\t%-50s\t%-30s\n", "init", "Create an empty geretps folder or reinitialize an existing one.";
+  printf "\t%-50s\t%-30s\n", "login --email <email> --password <password>", "Get authentication token and store authentication data.";
+  printf "\t%-50s\t%-30s\n", "help", "Show this help message and quit.";
+  say "\nDescription:";
+  printf "\t%-50s\n", "...";
+  say "\nExample:";
+  say "\nSee 'geretps <command> help' for more information on a specific command.";
+
+  exit($SUCCESS);
+}
+
+sub _init{
+  my $error_code = $SUCCESS;
+
+  if(___is_geretps_folder()){
+    printf "%-50s", "Reinitializing existing GereTPs folder...";
+    system("rm -r .geretps &> /dev/null");
+  }else{
+    printf "%-50s", "Initializing GereTPs folder...";
+  }
+
+  $error_code = $ERROR_MKDIR if system("mkdir .geretps &> /dev/null");
+  if($error_code){ say "ERROR"; }else{ say "SUCCESS"; }
+
+  _login() if(defined $params{email} || defined $params{password});
+
+  exit($error_code);
+}
+
+sub _login{
+  my $error_code = $SUCCESS;
+  my $auth_token;
+
+  unless(___is_geretps_folder()){
+    say "Not a geretps folder.";
+    say "See 'geretps init' command.";
+    exit($ERROR_NOT_GERETPS_FOLDER)
+  }
+
+  if(!defined $params{email} || !defined $params{password}){
+      say "Parameters email and password are required for authentication.";
+      say "\nSuggestion: geretps login --email <email> --password <password>.";
+      exit($ERROR_INVALID_PARAMS);
+  }
+
+  printf "%-50s", "Authenticating user...";
+  my $geretps = Net::GereTPs->new({email => $params{email}, password => $params{password}});
+  $auth_token = $geretps->session->get_auth_token();
+
+  if(!defined $auth_token || $auth_token eq ""){
+    say "ERROR";
+    exit($ERROR_AUTHENTICATION);
+  }else{
+    say "SUCCESS";
+  }
+
+  if(___have_authentication_information()){
+    printf "%-50s", "Resetting your authentication information...";
+  }else{
+    printf "%-50s", "Storing authentication information...";
+  }
+
+  my $auth_data = "EMAIL = $params{email}\nAUTHENTICATION_TOKEN = $auth_token";
+  system("echo '$auth_data' > .geretps/authentication");
+
+  say "SUCCESS";
+
+  exit($error_code);
+}
+
+sub _list{
+  my $error_code = $SUCCESS;
+  my $geretps = ___authenticate();
+
+  if(!@ARGV){
+    say "Parameter objects are required for authentication.";
+    say "\nSuggestion: geretps list <objects> [options].";
+  }
+
+  my $objects = shift @ARGV;
+
+
+
+  exit($error_code);
+}
+
+sub ___authenticate{
+  printf "%-50s", "Authenticating user...";
+  
+  if(!___have_authentication_information()){
+    say "ERROR";
+    say "\nSuggestion: geretps login --email <email> --password <password>.";
+    exit($ERROR_AUTHENTICATION);
+  }
+
+  my $auth_info = ___get_authentication_information();
+  my $geretps = Net::GereTPs->new({email => $params{email}, password => $params{password}});
+  my $auth_token = $geretps->session->get_auth_token();
+
+  if(!defined $auth_token || $auth_token eq ""){
+    say "ERROR";
+    exit($ERROR_AUTHENTICATION);
+  }
+
+  return $geretps;
+}
+
+sub ___get_authentication_information{
+  my $auth_info = {}
+  return $auth_info unless (___have_authentication_information());
+
+  my $authentication = `cat .geretps/authentication`;
+  if($authentication =~ /EMAIL\s=\s(\S@\S.\S)/ && $authentication =~ /AUTHENTICATION_TOKEN\s=\s(\S)/){
+    $auth_info->{email} = $1;
+    $auth_info->{auth_token} = $2;
+  }
+
+  return $auth_info;
+}
+
+sub ___is_geretps_folder{
+  my @folders = `ls -a .`;
+
+  for my$folder (@folders){
+    chomp $folder;
+    return 1 if(-d $folder && $folder eq ".geretps");
+  }
+
+  return 0;
+}
+
+sub ___have_authentication_information{
+  return 0 unless (___is_geretps_folder());
+
+  if(-e ".geretps/authentication"){
+    my $authentication = `cat .geretps/authentication`;
+    return 1 if($authentication =~ /EMAIL\s=\s(\S@\S.\S)/ && $authentication =~ /AUTHENTICATION_TOKEN\s=\s(\S)/);
+  }
+  
+  return 0;
+}
 
 my $geretps = Net::GereTPs->new({email => 'jcr@di.uminho.pt', password => 'jcrjcrjcr'});
 print $geretps->session->get_auth_token();

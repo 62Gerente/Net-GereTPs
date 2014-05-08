@@ -17,15 +17,6 @@ sub new{
   Log::Log4perl->easy_init($INFO);
   $self->{logger} = Log::Log4perl->get_logger('Net::GereTPs::V1::Session');
 
-  unless (defined $params->{email}){
-    $self->{logger}->error("Email parameter is required for authentication.");
-    exit(1);
-  }
-  unless (defined $params->{password} || defined $params->{auth_token}){
-    $self->{logger}->error("Password or Authentication Token parameters are required for authentication.");
-    exit(1);
-  }
-
   # FIX ME
     $self->{service}{api}{url} = "http://localhost:3000/api";
     $self->{service}{api}{sessions}{url} = "http://localhost:3000/api/sessions";
@@ -55,14 +46,10 @@ sub get_email{
 
 sub request_auth_token{
   my $self = shift;
+  my $auth_token;
 
   my $json_response = $self->create_session();
-  my $auth_token = $json_response->{'authentication'}->{'user_token'};
-
-  if ($auth_token eq ""){
-    $self->{logger}->error("Invalid email or password.");
-    exit(1);
-  }
+  $auth_token = $json_response->{'authentication'}->{'user_token'};
 
   return $auth_token;
 }
@@ -88,9 +75,6 @@ sub create_session{
   if (0 == $retcode) {
     $response = HTTP::Response->parse($response);
     $json_response = decode_json $response->decoded_content;
-  } else {
-    $self->{logger}->error("Error creating new session.");
-    exit(1);
   }
 
   return $json_response;
