@@ -4,7 +4,9 @@ use common::sense;
 use Net::GereTPs;
 use Getopt::Long;
 use Data::Dumper;
-use utf8::all;
+use Unicode::Normalize;
+
+binmode STDOUT, ":utf8"; 
 
 my $SUCCESS = 0;
 my $ERROR = -1;
@@ -33,6 +35,7 @@ sub parser{
     when("login"){ _login() }
     when("list"){ _list() }
     when("show"){ _show() }
+    when("download"){ _download() }
     default{
       say "ERROR: '$command' is not a geretps command. See 'geretps --help'.";
       exit($ERROR_INVALID_COMMAND);
@@ -218,6 +221,128 @@ sub _download{
   exit($error_code);
 }
 
+sub __download_deliveries{
+  my $geretps = shift;
+  my $error_code = $SUCCESS;
+
+  my $projects = $geretps->projects->all();
+  printf "%-7s%s\n", "INFO:", "No available projects." if(!@$projects);
+
+  if (ref($projects) eq "HASH") {
+    if(defined $projects->{error}){
+      say "ERROR: Couldn't find projects.";
+      exit($ERROR);
+    }
+  }
+
+  for my$project (@$projects){
+    my $project_id = $project->{id};
+    my $project_name = $project->{name};
+
+    printf "\n\n%-7s%-80s", "INFO:", "Requesting '$project->{name}' information...";
+    
+    $project_name = ___normalize($project_name);
+    system("mkdir '$project_name' &> /dev/null") if(! -d "$project_name");
+
+    say "SUCCESS";
+
+    my $phases = $geretps->phases($project_id)->all();
+    printf "%-10s%s\n", "INFO:", "No available phases in this project." if(!@$phases);
+
+    if (ref($phases) eq "HASH") {
+      if(defined $phases->{error}){
+        say "ERROR: Couldn't find phases in this project.";
+        exit($ERROR);
+      }
+    }
+
+    for my$phase (@$phases){
+      my $phase_id = $phase->{id};
+      my $phase_name = $phase->{name};
+
+      printf "\n%-10s%-77s", "INFO:", "Requesting '$phase->{name}' information...";
+
+      $phase_name = ___normalize($phase_name);
+      system("mkdir '$project_name/$phase_name' &> /dev/null") if(! -d "$project_name/$phase_name");   
+
+      say "SUCCESS";
+
+      my $groups = $geretps->groups("phases",$phase_id)->all();
+      printf "%-13s%s\n", "INFO:", "No groups with deliveries in this phase." if(!@$groups);
+
+      if (ref($groups) eq "HASH") {
+        if(defined $groups->{error}){
+          say "ERROR: Couldn't find groups with deliveries in this phase.";
+          exit($ERROR);
+        }
+      }
+
+      for my$group (@$groups){
+        my $group_id = $group->{id};
+        my $group_name = $group->{identifier};
+
+        printf "%-13s%-74s", "INFO:", "Requesting '$group->{identifier}' information...";
+
+        $group_name = ___normalize($group_name);
+        system("mkdir '$project_name/$phase_name/$group_name' &> /dev/null") if(! -d "$project_name/$phase_name/$group_name"); 
+
+        say "SUCCESS";  
+
+        my $deliveries = $geretps->deliveries("phases",$phase_id,"groups",$group_id)->all();
+        printf "%-16s%s\n", "INFO:", "No avaliable deliveries for this group in this phase." if(!@$deliveries);
+
+        if (ref($deliveries) eq "HASH") {
+          if(defined $deliveries->{error}){
+            say "ERROR: Couldn't find deliveries for this group in this phase.";
+            exit($ERROR);
+          }
+        }
+
+        for my$delivery (@$deliveries){
+          my $delivery_id = $delivery->{id};
+          my $delivery_date = $delivery->{created_at};
+          my $delivery_name = "DELIVERY#$delivery_id-$delivery_date";
+
+          printf "%-16s%-71s", "INFO:", "Requesting delivery #$delivery_id information...";
+
+          $delivery_name = ___normalize($delivery_name);
+          system("mkdir '$project_name/$phase_name/$group_name/$delivery_name' &> /dev/null") if(! -d "$project_name/$phase_name/$group_name/$delivery_name"); 
+
+          say "SUCCESS";  
+
+          my $documents = $geretps->documents($delivery_id)->all();
+          printf "%-19s%s\n", "INFO:", "No avaliable documents for this delivery." if(!@$documents);
+
+          if (ref($documents) eq "HASH") {
+            if(defined $documents->{error}){
+              say "ERROR: Couldn't find documents for this delivery.";
+              exit($ERROR);
+            }
+          }
+
+          for my$document (@$documents){
+            my $document_id = $document->{id};
+            my $document_name = $document->{name};
+
+            printf "%-19s%-68s", "INFO:", "Dowloading $document_name...";
+
+            my $file = $geretps->documents->download($document_id);
+
+            open my $fh, "+>", "$project_name/$phase_name/$group_name/$delivery_name/$document_name" or die "Can't open file for writing: $!\n";
+            binmode $fh,':raw';
+            print $fh $file;
+            close($fh);
+
+            say "SUCCESS";  
+          }
+        }
+      }
+    }
+  }
+  
+  exit($error_code)
+}
+
 sub __show_project{
   my ($geretps, $id) = @_;
   my $error_code = $SUCCESS;
@@ -240,7 +365,7 @@ sub __list_projects{
   my $error_code = $SUCCESS;
 
   my $projects = $geretps->projects->all();
-  say "Nenhum projeto disponível." if(!@$projects);
+  printf "%-7s%s\n", "INFO:", "No available projects." if(!@$projects);
 
   if (ref($projects) eq "HASH") {
     if(defined $projects->{error}){
@@ -368,6 +493,17 @@ sub ___have_authentication_information{
   }
   
   return 0;
+}
+
+sub ___normalize{
+  my $string = shift;
+
+  $string = NFKD( $string );
+  $string =~ s/\p{NonspacingMark}//g;
+  $string =~ s/\s+/_/g;
+  $string =~ s/\./_/g;
+
+  return $string;
 }
 
 my $geretps = Net::GereTPs->new({email => 'jcr@di.uminho.pt', password => 'jcrjcrjcr'});
