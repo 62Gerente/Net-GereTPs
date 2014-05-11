@@ -46,7 +46,7 @@ sub get{
   return decode_json _curl("GET", "$self->{service}{api}{phases}{url}/$id", $data);
 }
 
-sub get{
+sub get_xml{
   my ($self, $id) = @_;
   my $email = $self->{user}{email};
   my $auth_token = $self->{user}{auth_token};

@@ -244,6 +244,12 @@ sub __download_deliveries{
     $project_name = ___normalize($project_name);
     system("mkdir '$project_name' &> /dev/null") if(! -d "$project_name");
 
+    my $project_info = $geretps->projects->get_xml($project_id);
+    open my $prfh, "+>", "$project_name/INFO.xml" or die "Can't open file for writing: $!\n";
+    binmode $prfh,':raw';
+    print $prfh $project_info;
+    close($prfh);
+
     say "SUCCESS";
 
     my $phases = $geretps->phases($project_id)->all();
@@ -264,6 +270,12 @@ sub __download_deliveries{
 
       $phase_name = ___normalize($phase_name);
       system("mkdir '$project_name/$phase_name' &> /dev/null") if(! -d "$project_name/$phase_name");   
+
+      my $phase_info = $geretps->phases->get_xml($phase_id);
+      open my $pfh, "+>", "$project_name/$phase_name/INFO.xml" or die "Can't open file for writing: $!\n";
+      binmode $pfh,':raw';
+      print $pfh $phase_info;
+      close($pfh);
 
       say "SUCCESS";
 
@@ -286,6 +298,12 @@ sub __download_deliveries{
         $group_name = ___normalize($group_name);
         system("mkdir '$project_name/$phase_name/$group_name' &> /dev/null") if(! -d "$project_name/$phase_name/$group_name"); 
 
+        my $group_info = $geretps->groups->get_xml($group_id);
+        open my $gfh, "+>", "$project_name/$phase_name/$group_name/INFO.xml" or die "Can't open file for writing: $!\n";
+        binmode $gfh,':raw';
+        print $gfh $group_info;
+        close($gfh);
+        
         say "SUCCESS";  
 
         my $deliveries = $geretps->deliveries("phases",$phase_id,"groups",$group_id)->all();
@@ -307,6 +325,12 @@ sub __download_deliveries{
 
           $delivery_name = ___normalize($delivery_name);
           system("mkdir '$project_name/$phase_name/$group_name/$delivery_name' &> /dev/null") if(! -d "$project_name/$phase_name/$group_name/$delivery_name"); 
+
+          my $delivery_info = $geretps->deliveries->get_xml($delivery_id);
+          open my $dfh, "+>", "$project_name/$phase_name/$group_name/$delivery_name/INFO.xml" or die "Can't open file for writing: $!\n";
+          binmode $dfh,':raw';
+          print $dfh $delivery_info;
+          close($dfh);
 
           say "SUCCESS";  
 
