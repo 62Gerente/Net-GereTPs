@@ -23,16 +23,24 @@ sub new{
     $self->{user}{auth_token} = $auth_token;
   }
 
-  if(defined $params->{phase}){
-    $self->{phase} = $params->{phase};
+  if(defined $params->{entity1} && defined $params->{entity1_id} && defined $params->{entity2} && defined $params->{entity2_id}){
+    $self->{entity1} = $params->{entity1};
+    $self->{entity1_id} = $params->{entity1_id};
+    $self->{entity2} = $params->{entity2};
+    $self->{entity2_id} = $params->{entity2_id};
 
     #FIX ME
-      $self->{service}{api}{deliveries}{url} = "http://localhost:3000/api/phases/$self->{phase}/deliveries";
+      $self->{service}{api}{deliveries}{url} = "http://localhost:3000/api/$self->{entity1}/$self->{entity1_id}/$self->{entity2}/$self->{entity2_id}/deliveries";
+  }elsif(defined $params->{entity1} && defined $params->{entity1_id}){
+    $self->{entity1} = $params->{entity1};
+    $self->{entity1_id} = $params->{entity1_id};
+
+    #FIX ME
+      $self->{service}{api}{deliveries}{url} = "http://localhost:3000/api/$self->{entity1}/$self->{entity1_id}/deliveries";
   }else{
     #FIX ME
       $self->{service}{api}{deliveries}{url} = "http://localhost:3000/api/deliveries";
   }
-
   return $self;
 }
 
@@ -43,7 +51,17 @@ sub get{
 
   my $data = "user_email=$email&user_token=$auth_token";
 
-  return _curl("GET", "$self->{service}{api}{deliveries}{url}/$id", $data);
+  return decode_json _curl("GET", "$self->{service}{api}{deliveries}{url}/$id", $data);
+}
+
+sub get_xml{
+  my ($self, $id) = @_;
+  my $email = $self->{user}{email};
+  my $auth_token = $self->{user}{auth_token};
+
+  my $data = "user_email=$email&user_token=$auth_token";
+
+  return _curl("GET", "$self->{service}{api}{deliveries}{url}/$id.xml", $data);
 }
 
 sub all{
@@ -53,12 +71,11 @@ sub all{
 
   my $data = "user_email=$email&user_token=$auth_token";
 
-  return _curl("GET", $self->{service}{api}{deliveries}{url}, $data);
+  return decode_json _curl("GET", $self->{service}{api}{deliveries}{url}, $data);
 }
 
 sub _curl{
   my ($method, $url, $data) = @_;
-  my $json_response;
 
   my $curl = WWW::Curl::Easy->new;
   $curl->setopt(CURLOPT_HEADER,1);
@@ -72,10 +89,9 @@ sub _curl{
   my $retcode = $curl->perform;
   if (0 == $retcode) {
     $response = HTTP::Response->parse($response);
-    $json_response = decode_json $response->decoded_content;
   }
 
-  return $json_response;
+  return $response->decoded_content;
 }
 
 1;

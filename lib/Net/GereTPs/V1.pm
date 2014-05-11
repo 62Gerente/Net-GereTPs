@@ -6,6 +6,11 @@ use warnings;
 use Log::Log4perl qw(:easy);
 use Net::GereTPs::V1::Session;
 use Net::GereTPs::V1::Projects;
+use Net::GereTPs::V1::Phases;
+use Net::GereTPs::V1::Groups;
+use Net::GereTPs::V1::Deliveries;
+use Net::GereTPs::V1::Documents;
+use Data::Dumper;
 
 our $VERSION = '0.01';
 
@@ -45,6 +50,38 @@ sub projects{
   my $email = $self->{user}{email};
 
   return Net::GereTPs::V1::Projects->new({email => $email, auth_token => $auth_token});
+}
+
+sub phases{
+  my ($self, $project) = @_;
+  my $auth_token = $self->{user}{auth_token};
+  my $email = $self->{user}{email};
+
+  return Net::GereTPs::V1::Phases->new({email => $email, auth_token => $auth_token, project => $project});
+}
+
+sub groups{
+  my ($self, $entity, $entity_id) = @_;
+  my $auth_token = $self->{user}{auth_token};
+  my $email = $self->{user}{email};
+
+  return Net::GereTPs::V1::Groups->new({email => $email, auth_token => $auth_token, entity => $entity, entity_id => $entity_id});
+}
+
+sub deliveries{
+  my ($self, $entity1, $entity1_id, $entity2, $entity2_id) = @_;
+  my $auth_token = $self->{user}{auth_token};
+  my $email = $self->{user}{email};
+
+  return Net::GereTPs::V1::Deliveries->new({email => $email, auth_token => $auth_token, entity1 => $entity1, entity1_id => $entity1_id, entity2 => $entity2, entity2_id => $entity2_id});
+}
+
+sub documents{
+  my ($self, $delivery) = @_;
+  my $auth_token = $self->{user}{auth_token};
+  my $email = $self->{user}{email};
+
+  return Net::GereTPs::V1::Documents->new({email => $email, auth_token => $auth_token, delivery => $delivery});
 }
 
 1;

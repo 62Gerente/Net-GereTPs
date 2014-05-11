@@ -43,7 +43,27 @@ sub get{
 
   my $data = "user_email=$email&user_token=$auth_token";
 
-  return _curl("GET", "$self->{service}{api}{documents}{url}/$id", $data);
+  return decode_json _curl("GET", "$self->{service}{api}{documents}{url}/$id", $data);
+}
+
+sub get_xml{
+  my ($self, $id) = @_;
+  my $email = $self->{user}{email};
+  my $auth_token = $self->{user}{auth_token};
+
+  my $data = "user_email=$email&user_token=$auth_token";
+
+  return _curl("GET", "$self->{service}{api}{documents}{url}/$id.xml", $data);
+}
+
+sub download{
+  my ($self, $id) = @_;
+  my $email = $self->{user}{email};
+  my $auth_token = $self->{user}{auth_token};
+
+  my $data = "user_email=$email&user_token=$auth_token";
+
+  return _curl("GET", "$self->{service}{api}{documents}{url}/$id/download", $data);
 }
 
 sub all{
@@ -53,12 +73,11 @@ sub all{
 
   my $data = "user_email=$email&user_token=$auth_token";
 
-  return _curl("GET", $self->{service}{api}{documents}{url}, $data);
+  return decode_json _curl("GET", $self->{service}{api}{documents}{url}, $data);
 }
 
 sub _curl{
   my ($method, $url, $data) = @_;
-  my $json_response;
 
   my $curl = WWW::Curl::Easy->new;
   $curl->setopt(CURLOPT_HEADER,1);
@@ -72,10 +91,9 @@ sub _curl{
   my $retcode = $curl->perform;
   if (0 == $retcode) {
     $response = HTTP::Response->parse($response);
-    $json_response = decode_json $response->decoded_content;
   }
 
-  return $json_response;
+  return $response->decoded_content;
 }
 
 1;

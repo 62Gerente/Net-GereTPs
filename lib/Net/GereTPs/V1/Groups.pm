@@ -1,4 +1,4 @@
-package Net::GereTPs::V1::Phases;
+package Net::GereTPs::V1::Groups;
 
 use 5.012000;
 use strict;
@@ -23,14 +23,15 @@ sub new{
     $self->{user}{auth_token} = $auth_token;
   }
 
-  if(defined $params->{project}){
-    $self->{project} = $params->{project};
+  if(defined $params->{entity} && defined $params->{entity_id}){
+    $self->{entity} = $params->{entity};
+    $self->{entity_id} = $params->{entity_id};
 
     #FIX ME
-      $self->{service}{api}{phases}{url} = "http://localhost:3000/api/projects/$self->{project}/phases";
+      $self->{service}{api}{groups}{url} = "http://localhost:3000/api/$self->{entity}/$self->{entity_id}/groups";
   }else{
     #FIX ME
-      $self->{service}{api}{phases}{url} = "http://localhost:3000/api/phases";
+      $self->{service}{api}{groups}{url} = "http://localhost:3000/api/groups";
   }
 
   return $self;
@@ -43,17 +44,17 @@ sub get{
 
   my $data = "user_email=$email&user_token=$auth_token";
 
-  return decode_json _curl("GET", "$self->{service}{api}{phases}{url}/$id", $data);
+  return decode_json _curl("GET", "$self->{service}{api}{groups}{url}/$id", $data);
 }
 
-sub get{
+sub get_xml{
   my ($self, $id) = @_;
   my $email = $self->{user}{email};
   my $auth_token = $self->{user}{auth_token};
 
   my $data = "user_email=$email&user_token=$auth_token";
 
-  return _curl("GET", "$self->{service}{api}{phases}{url}/$id.xml", $data);
+  return _curl("GET", "$self->{service}{api}{groups}{url}/$id.xml", $data);
 }
 
 sub all{
@@ -63,7 +64,7 @@ sub all{
 
   my $data = "user_email=$email&user_token=$auth_token";
 
-  return decode_json _curl("GET", $self->{service}{api}{phases}{url}, $data);
+  return decode_json _curl("GET", $self->{service}{api}{groups}{url}, $data);
 }
 
 sub _curl{
@@ -91,11 +92,11 @@ __END__
 
 =head1 NAME
 
-Net::GereTPs::V1::Phases - Perl extension for GereTPs Phases APIv1
+Net::GereTPs::V1::Groups - Perl extension for GereTPs Groups APIv1
 
 =head1 SYNOPSIS
 
-  use Net::GereTPs::V1::Phases;
+  use Net::GereTPs::V1::Groups;
 
 =head1 DESCRIPTION
 
