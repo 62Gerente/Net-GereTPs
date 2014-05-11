@@ -1,4 +1,4 @@
-package Net::GereTPs::V1::Session;
+package Net::GereTPs::V1::Projects;
 
 use 5.012000;
 use strict;
@@ -12,9 +12,9 @@ our $VERSION = '0.01';
 sub new{
   my ($class, $params) = @_;
   my $self = bless {}, $class;
-  
+
   # FIX ME
-    $self->{service}{api}{sessions}{url} = "http://localhost:3000/api/sessions";
+    $self->{service}{api}{projects}{url} = "http://localhost:3000/api/projects";
 
   $self->{user}{email} = $params->{email};
 
@@ -29,38 +29,34 @@ sub new{
   return $self;
 }
 
-sub get_auth_token{
-  my $self = shift;
-  return $self->{user}{auth_token};
+sub get{
+  my ($self, $id) = @_;
+  my $email = $self->{user}{email};
+  my $auth_token = $self->{user}{auth_token};
+
+  my $data = "user_email=$email&user_token=$auth_token";
+
+  return _curl("GET", "$self->{service}{api}{projects}{url}/$id", $data);
 }
 
-sub get_email{
-  my $self = shift;
-  return $self->{user}{email};
-}
-
-sub request_auth_token{
-  my $self = shift;
-  my $auth_token;
-
-  my $json_response = $self->create_session();
-  $auth_token = $json_response->{'authentication'}->{'user_token'};
-
-  return $auth_token;
-}
-
-sub create_session{
+sub all{
   my $self = shift;
   my $email = $self->{user}{email};
-  my $password = $self->{user}{password};
-  my $json_response;
+  my $auth_token = $self->{user}{auth_token};
 
-  my $data = "user[email]=$email&user[password]=$password";
+  my $data = "user_email=$email&user_token=$auth_token";
+
+  return _curl("GET", $self->{service}{api}{projects}{url}, $data);
+}
+
+sub _curl{
+  my ($method, $url, $data) = @_;
+  my $json_response;
 
   my $curl = WWW::Curl::Easy->new;
   $curl->setopt(CURLOPT_HEADER,1);
-  $curl->setopt(CURLOPT_URL, $self->{service}{api}{sessions}{url});
-  $curl->setopt(CURLOPT_POST, 1);
+  $curl->setopt(CURLOPT_URL, $url);
+  $curl->setopt(CURLOPT_CUSTOMREQUEST, $method);  
   $curl->setopt(CURLOPT_POSTFIELDS, $data);  
 
   my $response;
@@ -80,11 +76,11 @@ __END__
 
 =head1 NAME
 
-Net::GereTPs::V1::Session - Perl extension for GereTPs Sessions APIv1
+Net::GereTPs::V1::Projects - Perl extension for GereTPs Projects APIv1
 
 =head1 SYNOPSIS
 
-  use Net::GereTPs::V1::Session;
+  use Net::GereTPs::V1::Projects;
 
 =head1 DESCRIPTION
 

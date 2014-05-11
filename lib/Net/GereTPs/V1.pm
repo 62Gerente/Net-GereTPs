@@ -5,6 +5,7 @@ use strict;
 use warnings;
 use Log::Log4perl qw(:easy);
 use Net::GereTPs::V1::Session;
+use Net::GereTPs::V1::Projects;
 
 our $VERSION = '0.01';
 
@@ -36,6 +37,14 @@ sub session{
   my $email = $self->{user}{email};
 
   return Net::GereTPs::V1::Session->new({email => $email, auth_token => $auth_token});
+}
+
+sub projects{
+  my $self = shift;
+  my $auth_token = $self->{user}{auth_token};
+  my $email = $self->{user}{email};
+
+  return Net::GereTPs::V1::Projects->new({email => $email, auth_token => $auth_token});
 }
 
 1;

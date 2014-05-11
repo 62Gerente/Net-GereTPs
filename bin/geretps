@@ -3,13 +3,16 @@
 use common::sense;
 use Net::GereTPs;
 use Getopt::Long;
+use Data::Dumper;
+use utf8::all;
 
 my $SUCCESS = 0;
-my $ERROR_INVALID_COMMAND = -1;
-my $ERROR_INVALID_PARAMS = -2;
-my $ERROR_AUTHENTICATION = -3;
-my $ERROR_NOT_GERETPS_FOLDER = -4;
-my $ERROR_MKDIR = -5;
+my $ERROR = -1;
+my $ERROR_INVALID_COMMAND = -2;
+my $ERROR_INVALID_PARAMS = -3;
+my $ERROR_AUTHENTICATION = -4;
+my $ERROR_NOT_GERETPS_FOLDER = -5;
+my $ERROR_MKDIR = -6;
 
 my %params = ();
 parser();
@@ -29,8 +32,9 @@ sub parser{
     when("init"){ _init() }
     when("login"){ _login() }
     when("list"){ _list() }
+    when("show"){ _show() }
     default{
-      say "geretps: '$command' is not a geretps command. See 'geretps --help'.";
+      say "ERROR: '$command' is not a geretps command. See 'geretps --help'.";
       exit($ERROR_INVALID_COMMAND);
     }
   }
@@ -39,15 +43,21 @@ sub parser{
 }
 
 sub _help{
-  say "usage: geretps <command> [<args>]";
+  say "USAGE: geretps <command> [<args>]";
 
   say "\nCommands:";
-  printf "\t%-50s\t%-30s\n", "init", "Create an empty geretps folder or reinitialize an existing one.";
-  printf "\t%-50s\t%-30s\n", "login --email <email> --password <password>", "Get authentication token and store authentication data.";
-  printf "\t%-50s\t%-30s\n", "help", "Show this help message and quit.";
+  printf "\t%-35s\t%-30s\n", "init", "Create an empty geretps folder or reinitialize an existing one.";
+  printf "\t%-35s\t%-30s\n", "login -E <email> -P <password>", "Get authentication token and store authentication data.";
+  printf "\t%-35s\t%-30s\n", "list <entity>", "List all objects of type entity belonging to the user.";
+  printf "\t%-35s\t%-30s\n", "show <entity> <id>", "Show the object of type entity with the specified identifier.";
+  printf "\t%-35s\t%-30s\n", "download <entity>", "Download all objects of type entity belonging to the user.";
+  printf "\t%-35s\t%-30s\n", "help", "Show this help message and quit.";
   say "\nDescription:";
-  printf "\t%-50s\n", "...";
-  say "\nExample:";
+  printf "\t%-35s\n", "...";
+  say "\nExamples:";
+  printf "\t%-35s\n", "geretps list projects";
+  printf "\t%-35s\n", "geretps show project 1";
+
   say "\nSee 'geretps <command> help' for more information on a specific command.";
 
   exit($SUCCESS);
@@ -57,10 +67,10 @@ sub _init{
   my $error_code = $SUCCESS;
 
   if(___is_geretps_folder()){
-    printf "%-50s", "Reinitializing existing GereTPs folder...";
+    printf "%-7s%-50s", "INFO:", "Reinitializing existing GereTPs folder...";
     system("rm -r .geretps &> /dev/null");
   }else{
-    printf "%-50s", "Initializing GereTPs folder...";
+    printf "%-7s%-50s", "INFO:", "Initializing GereTPs folder...";
   }
 
   $error_code = $ERROR_MKDIR if system("mkdir .geretps &> /dev/null");
@@ -76,18 +86,18 @@ sub _login{
   my $auth_token;
 
   unless(___is_geretps_folder()){
-    say "Not a geretps folder.";
+    say "ERROR: Not a geretps folder.";
     say "See 'geretps init' command.";
     exit($ERROR_NOT_GERETPS_FOLDER)
   }
 
   if(!defined $params{email} || !defined $params{password}){
-      say "Parameters email and password are required for authentication.";
-      say "\nSuggestion: geretps login --email <email> --password <password>.";
+      say "ERROR: Parameters email and password are required for authentication.";
+      say "\nUSAGE: geretps login --email <email> --password <password>.";
       exit($ERROR_INVALID_PARAMS);
   }
 
-  printf "%-50s", "Authenticating user...";
+  printf "%-7s%-50s", "INFO:", "Authenticating user...";
   my $geretps = Net::GereTPs->new({email => $params{email}, password => $params{password}});
   $auth_token = $geretps->session->get_auth_token();
 
@@ -99,9 +109,9 @@ sub _login{
   }
 
   if(___have_authentication_information()){
-    printf "%-50s", "Resetting your authentication information...";
+    printf "%-7s%-50s", "INFO:", "Resetting your authentication information...";
   }else{
-    printf "%-50s", "Storing authentication information...";
+    printf "%-7s%-50s", "INFO:", "Storing authentication information...";
   }
 
   my $auth_data = "EMAIL = $params{email}\nAUTHENTICATION_TOKEN = $auth_token";
@@ -117,44 +127,220 @@ sub _list{
   my $geretps = ___authenticate();
 
   if(!@ARGV){
-    say "Parameter objects are required for authentication.";
-    say "\nSuggestion: geretps list <objects> [options].";
+    say "ERROR: Parameter entity are required.";
+    say "\nUSAGE: geretps list <entity> [<options>].";
+    say "\nSee 'geretps list help' for more information.";
+    exit($ERROR_INVALID_PARAMS)
   }
 
-  my $objects = shift @ARGV;
+  my $entity = shift @ARGV;
 
-
+  given($entity){
+    when (/^(projects|p)$/){
+      __list_projects($geretps);
+    }
+    when (/^(help|h)$/){
+      __list_help();
+    }
+    default{
+      say "ERROR: Unknown entity.";
+      __list_help();
+    }
+  }
 
   exit($error_code);
 }
 
+sub _show{
+  my $error_code = $SUCCESS;
+  my $geretps = ___authenticate();
+
+  if(!@ARGV){
+    say "ERROR: Parameter entity are required.";
+    say "\nUSAGE: geretps show <entity> <id> [<options>].";
+    say "\nSee 'geretps show help' for more information.";
+    exit($ERROR_INVALID_PARAMS)
+  }
+
+  my $entity = shift @ARGV;
+
+  if(!@ARGV && $entity ne "help" && $entity ne "h"){
+    say "ERROR: Parameter id are required.";
+    say "\nUSAGE: geretps show <entity> <id> [<options>].";
+    say "\nSee 'geretps show help' for more information.";
+    exit($ERROR_INVALID_PARAMS)
+  }
+
+  my $id = shift @ARGV;
+
+  given($entity){
+    when (/^(project|p)$/){
+      __show_project($geretps, $id);
+    }
+    when (/^(help|h)$/){
+      __show_help();
+    }
+    default{
+      say "ERROR: Unknown entity.";
+      __show_help();
+    }
+  }
+
+  exit($error_code);
+}
+
+sub _download{
+  my $error_code = $SUCCESS;
+  my $geretps = ___authenticate();
+
+  if(!@ARGV){
+    say "ERROR: Parameter entity are required.";
+    say "\nUSAGE: geretps download <entity> [<options>].";
+    say "\nSee 'geretps download help' for more information.";
+    exit($ERROR_INVALID_PARAMS)
+  }
+
+  my $entity = shift @ARGV;
+
+  given($entity){
+    when (/^(deliveries|d)$/){
+      __download_deliveries($geretps);
+    }
+    when (/^(help|h)$/){
+      __download_help();
+    }
+    default{
+      say "ERROR: Unknown entity.";
+      __download_help();
+    }
+  }
+
+  exit($error_code);
+}
+
+sub __show_project{
+  my ($geretps, $id) = @_;
+  my $error_code = $SUCCESS;
+
+  my $project = $geretps->projects->get($id);
+  if (ref($project) eq "HASH") {
+    if(defined $project->{error}){
+      say "ERROR: Couldn't find project with id $id.";
+      exit($ERROR_INVALID_PARAMS);
+    }
+  }
+
+  say ___project_to_s($project);
+  
+  exit($error_code)
+}
+
+sub __list_projects{
+  my $geretps = shift;
+  my $error_code = $SUCCESS;
+
+  my $projects = $geretps->projects->all();
+  say "Nenhum projeto disponível." if(!@$projects);
+
+  if (ref($projects) eq "HASH") {
+    if(defined $projects->{error}){
+      say "ERROR: Couldn't find projects.";
+      exit($ERROR);
+    }
+  }
+
+  for my$project (@$projects){
+    say ___project_id_name_to_s($project);
+  }
+  
+  exit($error_code)
+}
+
+sub __list_help{
+  say "USAGE: geretps list <entity> [<options>]";
+
+  say "\nEntities:";
+  printf "\t%-50s\t%-30s\n", "projects", "List all projects in which the user is involved";
+  say "\nDescription:";
+  printf "\t%-50s\n", "...";
+
+  exit($SUCCESS);
+}
+
+sub __show_help{
+  say "USAGE: geretps show <entity> <id> [<options>]";
+
+  say "\nEntities:";
+  printf "\t%-50s\t%-30s\n", "project", "Show the project with specified identifier.";
+  say "\nDescription:";
+  printf "\t%-50s\n", "...";
+
+  exit($SUCCESS);
+}
+
+sub __download_help{
+  say "USAGE: geretps download <entity> [<options>]";
+
+  say "\nEntities:";
+  printf "\t%-50s\t%-30s\n", "deliveries", "Download all deliveries in which the user is involved";
+  say "\nDescription:";
+  printf "\t%-50s\n", "...";
+
+  exit($SUCCESS);
+}
+
+sub ___project_id_name_to_s{
+  my $project = shift;
+
+  return sprintf "#%-5s%s", $project->{id}, $project->{name};  
+}
+
+sub ___project_to_s{
+  my $project = shift;
+  my $string = "";
+
+  $project->{description} =~ s|<.+?>||g;;  
+
+  $string .= sprintf "%-20s%s\n", "IDENTIFIER:", $project->{id};  
+  $string .= sprintf "%-20s%s\n", "NAME:", $project->{name};  
+  $string .= sprintf "%-20s%s\n", "DESCRIPTION:", $project->{description};  
+  $string .= sprintf "%-20s%s\n", "BEGIN DATE:", $project->{begin_date};  
+  $string .= sprintf "%-20s%s\n", "END DATE:", $project->{end_date};  
+  $string .= sprintf "%-20s%s\n", "MIN ELEMS:", $project->{min_elems};  
+  $string .= sprintf "%-20s%s\n", "MAX ELEMS:", $project->{max_elems};  
+
+  return $string;
+}
+
 sub ___authenticate{
-  printf "%-50s", "Authenticating user...";
+  printf "%-7s%-50s", "INFO:", "Authenticating user...";
   
   if(!___have_authentication_information()){
     say "ERROR";
-    say "\nSuggestion: geretps login --email <email> --password <password>.";
+    say "\nUse 'geretps login --email <email> --password <password>'.";
     exit($ERROR_AUTHENTICATION);
   }
 
   my $auth_info = ___get_authentication_information();
-  my $geretps = Net::GereTPs->new({email => $params{email}, password => $params{password}});
+  my $geretps = Net::GereTPs->new({email => $auth_info->{email}, auth_token => $auth_info->{auth_token}});
   my $auth_token = $geretps->session->get_auth_token();
 
   if(!defined $auth_token || $auth_token eq ""){
     say "ERROR";
     exit($ERROR_AUTHENTICATION);
+  }else{
+    say "SUCCESS\n";
   }
 
   return $geretps;
 }
 
 sub ___get_authentication_information{
-  my $auth_info = {}
+  my $auth_info = {};
   return $auth_info unless (___have_authentication_information());
 
   my $authentication = `cat .geretps/authentication`;
-  if($authentication =~ /EMAIL\s=\s(\S@\S.\S)/ && $authentication =~ /AUTHENTICATION_TOKEN\s=\s(\S)/){
+  if($authentication =~ /EMAIL\s*=\s*(.*@.*\..*)\s*\n\s*AUTHENTICATION_TOKEN\s*=\s*(\S*)/){
     $auth_info->{email} = $1;
     $auth_info->{auth_token} = $2;
   }
@@ -178,7 +364,7 @@ sub ___have_authentication_information{
 
   if(-e ".geretps/authentication"){
     my $authentication = `cat .geretps/authentication`;
-    return 1 if($authentication =~ /EMAIL\s=\s(\S@\S.\S)/ && $authentication =~ /AUTHENTICATION_TOKEN\s=\s(\S)/);
+    return 1 if($authentication =~ /EMAIL\s*=\s*(.*@.*\..*)\s*\n\s*AUTHENTICATION_TOKEN\s*=\s*(\S*)/);
   }
   
   return 0;
