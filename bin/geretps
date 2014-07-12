@@ -5,8 +5,10 @@ use Net::GereTPs;
 use Getopt::Long;
 use Data::Dumper;
 use Unicode::Normalize;
+use File::Basename;
+use Cwd 'abs_path';
 
-binmode STDOUT, ":utf8"; 
+binmode STDOUT, ":utf8";
 
 my $SUCCESS = 0;
 my $ERROR = -1;
@@ -36,6 +38,7 @@ sub parser{
     when("list"){ _list() }
     when("show"){ _show() }
     when("download"){ _download() }
+    when("evaluate"){ _evaluate() }
     default{
       say "ERROR: '$command' is not a geretps command. See 'geretps --help'.";
       exit($ERROR_INVALID_COMMAND);
@@ -54,6 +57,7 @@ sub _help{
   printf "\t%-35s\t%-30s\n", "list <entity>", "List all objects of type entity belonging to the user.";
   printf "\t%-35s\t%-30s\n", "show <entity> <id>", "Show the object of type entity with the specified identifier.";
   printf "\t%-35s\t%-30s\n", "download <entity>", "Download all objects of type entity belonging to the user.";
+  printf "\t%-35s\t%-30s\n", "evaluate <entity>", "Upload object of type entity.";
   printf "\t%-35s\t%-30s\n", "help", "Show this help message and quit.";
   say "\nDescription:";
   printf "\t%-35s\n", "...";
@@ -240,7 +244,7 @@ sub __download_deliveries{
     my $project_name = $project->{name};
 
     printf "\n\n%-7s%-80s", "INFO:", "Requesting '$project->{name}' information...";
-    
+
     $project_name = ___normalize($project_name);
     system("mkdir '$project_name' &> /dev/null") if(! -d "$project_name");
 
@@ -269,7 +273,7 @@ sub __download_deliveries{
       printf "\n%-10s%-77s", "INFO:", "Requesting '$phase->{name}' information...";
 
       $phase_name = ___normalize($phase_name);
-      system("mkdir '$project_name/$phase_name' &> /dev/null") if(! -d "$project_name/$phase_name");   
+      system("mkdir '$project_name/$phase_name' &> /dev/null") if(! -d "$project_name/$phase_name");
 
       my $phase_info = $geretps->phases->get_xml($phase_id);
       open my $pfh, "+>", "$project_name/$phase_name/INFO.xml" or die "Can't open file for writing: $!\n";
@@ -296,15 +300,15 @@ sub __download_deliveries{
         printf "%-13s%-74s", "INFO:", "Requesting '$group->{identifier}' information...";
 
         $group_name = ___normalize($group_name);
-        system("mkdir '$project_name/$phase_name/$group_name' &> /dev/null") if(! -d "$project_name/$phase_name/$group_name"); 
+        system("mkdir '$project_name/$phase_name/$group_name' &> /dev/null") if(! -d "$project_name/$phase_name/$group_name");
 
         my $group_info = $geretps->groups->get_xml($group_id);
         open my $gfh, "+>", "$project_name/$phase_name/$group_name/INFO.xml" or die "Can't open file for writing: $!\n";
         binmode $gfh,':raw';
         print $gfh $group_info;
         close($gfh);
-        
-        say "SUCCESS";  
+
+        say "SUCCESS";
 
         my $deliveries = $geretps->deliveries("phases",$phase_id,"groups",$group_id)->all();
         printf "%-16s%s\n", "INFO:", "No avaliable deliveries for this group in this phase." if(!@$deliveries);
@@ -324,15 +328,20 @@ sub __download_deliveries{
           printf "%-16s%-71s", "INFO:", "Requesting delivery #$delivery_id information...";
 
           $delivery_name = ___normalize($delivery_name);
-          system("mkdir '$project_name/$phase_name/$group_name/$delivery_name' &> /dev/null") if(! -d "$project_name/$phase_name/$group_name/$delivery_name"); 
+          system("mkdir '$project_name/$phase_name/$group_name/$delivery_name' &> /dev/null") if(! -d "$project_name/$phase_name/$group_name/$delivery_name");
 
           my $delivery_info = $geretps->deliveries->get_xml($delivery_id);
+          my $delivery_grades = $geretps->deliveries->get_grades_xml($delivery_id);
+
           open my $dfh, "+>", "$project_name/$phase_name/$group_name/$delivery_name/INFO.xml" or die "Can't open file for writing: $!\n";
+          open my $dgrades, "+>", "$project_name/$phase_name/$group_name/$delivery_name/Grades.xml" or die "Can't open file for writing: $!\n";
           binmode $dfh,':raw';
+          binmode $dgrades,':raw';
           print $dfh $delivery_info;
+          print $dgrades $delivery_grades;
           close($dfh);
 
-          say "SUCCESS";  
+          say "SUCCESS";
 
           my $documents = $geretps->documents($delivery_id)->all();
           printf "%-19s%s\n", "INFO:", "No avaliable documents for this delivery." if(!@$documents);
@@ -357,13 +366,13 @@ sub __download_deliveries{
             print $fh $file;
             close($fh);
 
-            say "SUCCESS";  
+            say "SUCCESS";
           }
         }
       }
     }
   }
-  
+
   exit($error_code)
 }
 
@@ -380,7 +389,7 @@ sub __show_project{
   }
 
   say ___project_to_s($project);
-  
+
   exit($error_code)
 }
 
@@ -401,7 +410,7 @@ sub __list_projects{
   for my$project (@$projects){
     say ___project_id_name_to_s($project);
   }
-  
+
   exit($error_code)
 }
 
@@ -441,29 +450,29 @@ sub __download_help{
 sub ___project_id_name_to_s{
   my $project = shift;
 
-  return sprintf "#%-5s%s", $project->{id}, $project->{name};  
+  return sprintf "#%-5s%s", $project->{id}, $project->{name};
 }
 
 sub ___project_to_s{
   my $project = shift;
   my $string = "";
 
-  $project->{description} =~ s|<.+?>||g;;  
+  $project->{description} =~ s|<.+?>||g;;
 
-  $string .= sprintf "%-20s%s\n", "IDENTIFIER:", $project->{id};  
-  $string .= sprintf "%-20s%s\n", "NAME:", $project->{name};  
-  $string .= sprintf "%-20s%s\n", "DESCRIPTION:", $project->{description};  
-  $string .= sprintf "%-20s%s\n", "BEGIN DATE:", $project->{begin_date};  
-  $string .= sprintf "%-20s%s\n", "END DATE:", $project->{end_date};  
-  $string .= sprintf "%-20s%s\n", "MIN ELEMS:", $project->{min_elems};  
-  $string .= sprintf "%-20s%s\n", "MAX ELEMS:", $project->{max_elems};  
+  $string .= sprintf "%-20s%s\n", "IDENTIFIER:", $project->{id};
+  $string .= sprintf "%-20s%s\n", "NAME:", $project->{name};
+  $string .= sprintf "%-20s%s\n", "DESCRIPTION:", $project->{description};
+  $string .= sprintf "%-20s%s\n", "BEGIN DATE:", $project->{begin_date};
+  $string .= sprintf "%-20s%s\n", "END DATE:", $project->{end_date};
+  $string .= sprintf "%-20s%s\n", "MIN ELEMS:", $project->{min_elems};
+  $string .= sprintf "%-20s%s\n", "MAX ELEMS:", $project->{max_elems};
 
   return $string;
 }
 
 sub ___authenticate{
   printf "%-7s%-50s", "INFO:", "Authenticating user...";
-  
+
   if(!___have_authentication_information()){
     say "ERROR";
     say "\nUse 'geretps login --email <email> --password <password>'.";
@@ -486,9 +495,10 @@ sub ___authenticate{
 
 sub ___get_authentication_information{
   my $auth_info = {};
-  return $auth_info unless (___have_authentication_information());
-
-  my $authentication = `cat .geretps/authentication`;
+  my $res = ___have_authentication_information();
+  return $auth_info unless ($res);
+  print "$res\n";
+  my $authentication = `cat $res`;
   if($authentication =~ /EMAIL\s*=\s*(.*@.*\..*)\s*\n\s*AUTHENTICATION_TOKEN\s*=\s*(\S*)/){
     $auth_info->{email} = $1;
     $auth_info->{auth_token} = $2;
@@ -498,24 +508,29 @@ sub ___get_authentication_information{
 }
 
 sub ___is_geretps_folder{
-  my @folders = `ls -a .`;
-
+  my $path = shift;
+  my @folders = `ls -a $path`;
   for my$folder (@folders){
     chomp $folder;
-    return 1 if(-d $folder && $folder eq ".geretps");
+    return $path if(-d "$path/$folder" && $folder eq ".geretps");
   }
+  return 0 if $path eq "/";
+  $path = dirname(abs_path($path));
+  return ___is_geretps_folder($path);
 
-  return 0;
 }
 
 sub ___have_authentication_information{
-  return 0 unless (___is_geretps_folder());
+  my $pwd = `pwd`;
+  my $res= ___is_geretps_folder($pwd);
+  return 0 unless ($res);
+  my $path = "$res/.geretps/authentication";
 
-  if(-e ".geretps/authentication"){
-    my $authentication = `cat .geretps/authentication`;
-    return 1 if($authentication =~ /EMAIL\s*=\s*(.*@.*\..*)\s*\n\s*AUTHENTICATION_TOKEN\s*=\s*(\S*)/);
+  if(-e $path){
+    my $authentication = `cat $path`;
+    return $path if($authentication =~ /EMAIL\s*=\s*(.*@.*\..*)\s*\n\s*AUTHENTICATION_TOKEN\s*=\s*(\S*)/);
   }
-  
+
   return 0;
 }
 
@@ -529,6 +544,59 @@ sub ___normalize{
 
   return $string;
 }
+
+sub _evaluate {
+  my $error_code = $SUCCESS;
+  my $geretps = ___authenticate();
+
+  if(!@ARGV){
+    say "ERROR: Parameter entity are required.";
+    say "\nUSAGE: geretps evaluate <entity> [<options>].";
+    say "\nSee 'geretps evaluate help' for more information.";
+    exit($ERROR_INVALID_PARAMS)
+  }
+
+  my $entity = shift @ARGV;
+  print Dumper $entity;
+  given($entity){
+    when (/^(group|g)$/){
+      __evaluate_group($geretps);
+    }
+    when (/^(student|s)$/){
+      __evaluate_student($geretps);
+    }
+    when (/^(help|h)$/){
+      __evaluate_help();
+    }
+    default{
+      say "ERROR: Unknown entity.";
+      __evaluate_help();
+    }
+  }
+
+  exit($error_code);
+}
+
+sub __evaluate_grades {
+  my $geretps = shift;
+  my $error_code = $SUCCESS;
+
+
+}
+
+sub __evaluate_help {
+  say "USAGE: geretps evaluate <entity> [<options>]";
+
+  say "\nEntities:";
+  printf "\t%-50s\t%-30s\n", "group", "evaluate a project's delivery of a group";
+  printf "\t%-50s\t%-30s\n", "student", "evaluate a project's delivery of a student";
+
+  say "\nDescription:";
+  printf "\t%-50s\n", "...";
+
+  exit($SUCCESS);
+}
+
 
 my $geretps = Net::GereTPs->new({email => 'jcr@di.uminho.pt', password => 'jcrjcrjcr'});
 print $geretps->session->get_auth_token();
