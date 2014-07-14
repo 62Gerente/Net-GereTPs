@@ -60,7 +60,7 @@ sub _help{
   printf "\t%-35s\t%-30s\n", "list <entity>", "List all objects of type entity belonging to the user.";
   printf "\t%-35s\t%-30s\n", "show <entity> <id>", "Show the object of type entity with the specified identifier.";
   printf "\t%-35s\t%-30s\n", "download <entity>", "Download all objects of type entity belonging to the user.";
-  printf "\t%-35s\t%-30s\n", "evaluate <entity>", "Upload object of type entity.";
+  printf "\t%-35s\t%-30s\n", "evaluate <entity>", "Evaluate a project's delivery of a student or group.";
   printf "\t%-35s\t%-30s\n", "help", "Show this help message and quit.";
   say "\nDescription:";
   printf "\t%-35s\n", "...";
