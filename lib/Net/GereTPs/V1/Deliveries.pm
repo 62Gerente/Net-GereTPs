@@ -1,12 +1,14 @@
 package Net::GereTPs::V1::Deliveries;
 
 use 5.012000;
+use utf8;
 use strict;
 use warnings;
 use WWW::Curl::Easy;
 use HTTP::Response;
-use JSON qw( decode_json ); 
-
+use JSON qw( decode_json );
+use Data::Dumper;
+use utf8::all;
 our $VERSION = '0.01';
 
 sub new{
@@ -60,8 +62,37 @@ sub get_xml{
   my $auth_token = $self->{user}{auth_token};
 
   my $data = "user_email=$email&user_token=$auth_token";
-
   return _curl("GET", "$self->{service}{api}{deliveries}{url}/$id.xml", $data);
+}
+
+
+sub get_grades_xml{
+  my ($self, $id) = @_;
+  my $email = $self->{user}{email};
+  my $auth_token = $self->{user}{auth_token};
+
+  my $data = "user_email=$email&user_token=$auth_token";
+  return _curl("GET", "$self->{service}{api}{deliveries}{url}/grades/$id.xml", $data);
+}
+
+
+sub eval_group{
+  my ($self,$id,$data) = @_;
+  my $email = $self->{user}{email};
+  my $auth_token = $self->{user}{auth_token};
+  my $sdata = "user_email=$email&user_token=$auth_token&group=$data->{group}&value=$data->{value}";
+  $sdata.="&comment=$data->{comment}" if defined $data->{comment};
+
+  return _curl("POST", "$self->{service}{api}{deliveries}{url}/$id/eval_group", $sdata);
+}
+
+sub eval_student{
+  my ($self,$id,$data) = @_;
+  my $email = $self->{user}{email};
+  my $auth_token = $self->{user}{auth_token};
+  my $sdata = "user_email=$email&user_token=$auth_token&student=$data->{student}&value=$data->{value}";
+  $sdata.="&comment=$data->{comment}" if defined $data->{comment};
+  return _curl("POST", "$self->{service}{api}{deliveries}{url}/$id/eval_student", $sdata);
 }
 
 sub all{
@@ -80,8 +111,8 @@ sub _curl{
   my $curl = WWW::Curl::Easy->new;
   $curl->setopt(CURLOPT_HEADER,1);
   $curl->setopt(CURLOPT_URL, $url);
-  $curl->setopt(CURLOPT_CUSTOMREQUEST, $method);  
-  $curl->setopt(CURLOPT_POSTFIELDS, $data);  
+  $curl->setopt(CURLOPT_CUSTOMREQUEST, $method);
+  $curl->setopt(CURLOPT_POSTFIELDS, $data);
 
   my $response;
   $curl->setopt(CURLOPT_WRITEDATA, \$response);

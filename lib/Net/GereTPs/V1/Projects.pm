@@ -5,7 +5,8 @@ use strict;
 use warnings;
 use WWW::Curl::Easy;
 use HTTP::Response;
-use JSON qw( decode_json ); 
+use JSON qw( decode_json );
+use Data::Dumper;
 
 our $VERSION = '0.01';
 
@@ -49,6 +50,28 @@ sub get_xml{
   return _curl("GET", "$self->{service}{api}{projects}{url}/$id.xml", $data);
 }
 
+
+
+sub get_grades_xlsx{
+  my ($self, $id) = @_;
+  my $email = $self->{user}{email};
+  my $auth_token = $self->{user}{auth_token};
+
+  my $data = "user_email=$email&user_token=$auth_token";
+  return _curl("GET", "$self->{service}{api}{projects}{url}/$id/export_grades", $data);
+}
+
+sub get_grades_pdf{
+  my ($self, $id) = @_;
+  my $email = $self->{user}{email};
+  my $auth_token = $self->{user}{auth_token};
+
+  my $data = "user_email=$email&user_token=$auth_token";
+  return _curl("GET", "$self->{service}{api}{projects}{url}/$id/export_grades_pdf", $data);
+}
+
+
+
 sub all{
   my $self = shift;
   my $email = $self->{user}{email};
@@ -65,8 +88,8 @@ sub _curl{
   my $curl = WWW::Curl::Easy->new;
   $curl->setopt(CURLOPT_HEADER,1);
   $curl->setopt(CURLOPT_URL, $url);
-  $curl->setopt(CURLOPT_CUSTOMREQUEST, $method);  
-  $curl->setopt(CURLOPT_POSTFIELDS, $data);  
+  $curl->setopt(CURLOPT_CUSTOMREQUEST, $method);
+  $curl->setopt(CURLOPT_POSTFIELDS, $data);
 
   my $response;
   $curl->setopt(CURLOPT_WRITEDATA, \$response);

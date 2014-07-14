@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use WWW::Curl::Easy;
 use HTTP::Response;
-use JSON qw( decode_json ); 
+use JSON qw( decode_json );
 
 our $VERSION = '0.01';
 
@@ -82,8 +82,8 @@ sub _curl{
   my $curl = WWW::Curl::Easy->new;
   $curl->setopt(CURLOPT_HEADER,1);
   $curl->setopt(CURLOPT_URL, $url);
-  $curl->setopt(CURLOPT_CUSTOMREQUEST, $method);  
-  $curl->setopt(CURLOPT_POSTFIELDS, $data);  
+  $curl->setopt(CURLOPT_CUSTOMREQUEST, $method);
+  $curl->setopt(CURLOPT_POSTFIELDS, $data);
 
   my $response;
   $curl->setopt(CURLOPT_WRITEDATA, \$response);

@@ -7,6 +7,8 @@ use Data::Dumper;
 use Unicode::Normalize;
 use File::Basename;
 use Cwd 'abs_path';
+use XML::XPath;
+use XML::XPath::XMLParser;
 
 binmode STDOUT, ":utf8";
 
@@ -17,6 +19,7 @@ my $ERROR_INVALID_PARAMS = -3;
 my $ERROR_AUTHENTICATION = -4;
 my $ERROR_NOT_GERETPS_FOLDER = -5;
 my $ERROR_MKDIR = -6;
+my $ERROR_INVALID_FOLDER = -7;
 
 my %params = ();
 parser();
@@ -72,8 +75,8 @@ sub _help{
 
 sub _init{
   my $error_code = $SUCCESS;
-
-  if(___is_geretps_folder()){
+  my $pwd = `pwd`;
+  if(___is_geretps_folder($pwd)){
     printf "%-7s%-50s", "INFO:", "Reinitializing existing GereTPs folder...";
     system("rm -r .geretps &> /dev/null");
   }else{
@@ -91,8 +94,9 @@ sub _init{
 sub _login{
   my $error_code = $SUCCESS;
   my $auth_token;
+  my $pwd = `pwd`;
 
-  unless(___is_geretps_folder()){
+  unless(___is_geretps_folder($pwd)){
     say "ERROR: Not a geretps folder.";
     say "See 'geretps init' command.";
     exit($ERROR_NOT_GERETPS_FOLDER)
@@ -213,6 +217,9 @@ sub _download{
     when (/^(deliveries|d)$/){
       __download_deliveries($geretps);
     }
+    when (/^(grades|g)$/){
+      __download_grades($geretps);
+    }
     when (/^(help|h)$/){
       __download_help();
     }
@@ -224,6 +231,80 @@ sub _download{
 
   exit($error_code);
 }
+
+sub __download_grades{
+  my $geretps = shift;
+  my $error_code = $SUCCESS;
+
+  my $projects = $geretps->projects->all();
+
+  for my$project (@$projects){
+    my $project_id = $project->{id};
+    my $project_name = $project->{name};
+
+    printf "\n\n%-7s%-80s", "INFO:", "Requesting '$project->{name}' grades...";
+
+    $project_name = ___normalize($project_name);
+
+    my $grade_pdf = $geretps->projects->get_grades_pdf($project_id);
+    my $grade_xlsx = $geretps->projects->get_grades_xlsx($project_id);
+
+
+    open my $prfh_pdf, "+>", "$project_name/GRADES.pdf" or die "Can't open file for writing: $!\n";
+    open my $prfh_xlsx, "+>", "$project_name/GRADES.xlsx" or die "Can't open file for writing: $!\n";
+
+    binmode $prfh_xlsx,':raw';
+    binmode $prfh_pdf,':raw';
+
+    print $prfh_pdf $grade_pdf;
+    print $prfh_xlsx $grade_xlsx;
+
+    close($prfh_xlsx);
+    close($prfh_pdf);
+
+    say "SUCCESS";
+
+    my $phases = $geretps->phases($project_id)->all();
+    printf "%-10s%s\n", "INFO:", "No available phases in this project." if(!@$phases);
+
+    if (ref($phases) eq "HASH") {
+      if(defined $phases->{error}){
+        say "ERROR: Couldn't find phases in this project.";
+        exit($ERROR);
+      }
+    }
+
+    for my$phase (@$phases){
+      my $phase_id = $phase->{id};
+      my $phase_name = $phase->{name};
+
+      printf "\n%-10s%-77s", "INFO:", "Requesting '$phase->{name}' grades...";
+
+      $phase_name = ___normalize($phase_name);
+
+      # my $phase_info_pdf = $geretps->phases->get_grades_pdf($phase_id);
+      my $phase_info_xlsx = $geretps->phases->get_grades_xlsx($phase_id);
+
+      open my $prfh_xlsx, "+>", "$project_name/$phase_name/GRADES.xlsx" or die "Can't open file for writing: $!\n";
+      # open my $prfh_pdf, "+>", "$project_name/$phase_name/GRADES.pdf" or die "Can't open file for writing: $!\n";
+
+      binmode $prfh_xlsx,':raw';
+      # binmode $prfh_pdf,':raw';
+
+      # print $prfh_pdf $phase_info;
+      print $prfh_xlsx $phase_info_xlsx;
+
+      close($prfh_xlsx);
+
+      # close($prfh_pdf);
+
+      say "SUCCESS";
+    }
+  }
+
+  exit($error_code)
+}
+
 
 sub __download_deliveries{
   my $geretps = shift;
@@ -331,11 +412,14 @@ sub __download_deliveries{
           system("mkdir '$project_name/$phase_name/$group_name/$delivery_name' &> /dev/null") if(! -d "$project_name/$phase_name/$group_name/$delivery_name");
 
           my $delivery_info = $geretps->deliveries->get_xml($delivery_id);
+
+          # $delivery_info =~ s/\<\?xml version=\"1\.0\"\?\>/<?xml version="1.0" encoding="utf-8"?>/;
+
           my $delivery_grades = $geretps->deliveries->get_grades_xml($delivery_id);
 
           open my $dfh, "+>", "$project_name/$phase_name/$group_name/$delivery_name/INFO.xml" or die "Can't open file for writing: $!\n";
           open my $dgrades, "+>", "$project_name/$phase_name/$group_name/$delivery_name/Grades.xml" or die "Can't open file for writing: $!\n";
-          binmode $dfh,':raw';
+          binmode $dfh,':utf8';
           binmode $dgrades,':raw';
           print $dfh $delivery_info;
           print $dgrades $delivery_grades;
@@ -497,7 +581,6 @@ sub ___get_authentication_information{
   my $auth_info = {};
   my $res = ___have_authentication_information();
   return $auth_info unless ($res);
-  print "$res\n";
   my $authentication = `cat $res`;
   if($authentication =~ /EMAIL\s*=\s*(.*@.*\..*)\s*\n\s*AUTHENTICATION_TOKEN\s*=\s*(\S*)/){
     $auth_info->{email} = $1;
@@ -510,10 +593,13 @@ sub ___get_authentication_information{
 sub ___is_geretps_folder{
   my $path = shift;
   my @folders = `ls -a $path`;
+
   for my$folder (@folders){
+    chomp $path;
     chomp $folder;
     return $path if(-d "$path/$folder" && $folder eq ".geretps");
   }
+
   return 0 if $path eq "/";
   $path = dirname(abs_path($path));
   return ___is_geretps_folder($path);
@@ -556,14 +642,23 @@ sub _evaluate {
     exit($ERROR_INVALID_PARAMS)
   }
 
+  my $is_deliveryFolder = __is_delivery_folder();
+
+  unless ($is_deliveryFolder) {
+    say "ERROR: You must be in delivery folder";
+    exit($ERROR_INVALID_FOLDER);
+  }
+
   my $entity = shift @ARGV;
-  print Dumper $entity;
+  my $xp = XML::XPath->new(filename => 'INFO.xml');
+  my $d_value = $xp->find("/delivery/id")->string_value();
+  my $g_value = $xp->find("/delivery/group-id")->string_value();
   given($entity){
     when (/^(group|g)$/){
-      __evaluate_group($geretps);
+      __evaluate_group($geretps,$d_value,$g_value);
     }
     when (/^(student|s)$/){
-      __evaluate_student($geretps);
+      __evaluate_student($geretps,$d_value);
     }
     when (/^(help|h)$/){
       __evaluate_help();
@@ -577,11 +672,50 @@ sub _evaluate {
   exit($error_code);
 }
 
-sub __evaluate_grades {
-  my $geretps = shift;
+
+sub __is_delivery_folder{
+  return 0 unless -e "INFO.xml";
+  my $xp = XML::XPath->new(filename => 'INFO.xml');
+  return $xp->exists("/delivery");
+}
+
+sub __evaluate_student {
+  my ($geretps,$delivery) = @_;
   my $error_code = $SUCCESS;
 
+  if(!@ARGV){
+    say "ERROR: Parameter value are required.";
+    say "\nUSAGE: geretps evaluate group <value> [<comment>].";
+    say "\nSee 'geretps evaluate help' for more information.";
+    exit($ERROR_INVALID_PARAMS)
+  }
 
+  my $student = shift @ARGV;
+  my $value = shift @ARGV;
+  my $comment = shift @ARGV;
+  printf "%-7s%-50s", "INFO:", "Evaluating student...";
+
+  $geretps->deliveries()->eval_student($delivery,{student => $student, value => $value, comment=> $comment});
+  say ("SUCCESS");
+}
+
+
+sub __evaluate_group {
+  my ($geretps,$delivery,$group) = @_;
+  my $error_code = $SUCCESS;
+
+  if(!@ARGV){
+    say "ERROR: Parameter value are required.";
+    say "\nUSAGE: geretps evaluate group <value> [<comment>].";
+    say "\nSee 'geretps evaluate help' for more information.";
+    exit($ERROR_INVALID_PARAMS)
+  }
+
+  my $value = shift @ARGV;
+  my $comment = shift @ARGV;
+  printf "%-7s%-50s", "INFO:", "Evaluating group...";
+  $geretps->deliveries()->eval_group($delivery,{group => $group, value => $value, comment=> $comment});
+  say ("SUCCESS");
 }
 
 sub __evaluate_help {
